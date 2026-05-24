@@ -1,0 +1,201 @@
+substitutions:
+  host_name: woleix-ac-controller
+  device_name: Woleix AC Controller
+  nec_address: 0xFB04
+
+esphome:
+  name: ${host_name}
+  friendly_name: ${device_name}
+  min_version: 2025.5.0
+  name_add_mac_suffix: false
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+# Enable logging
+logger:
+  level: DEBUG
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  min_auth_mode: WPA2
+  ap:
+    ssid: ${device_name}
+    password: !secret ap_password
+
+web_server:
+  port: 80
+  include_internal: true
+
+#external_components:
+#  - source: github://ok11/esphome-external-components/esphome@main
+#    components: [ climate_ir_woleix ]
+#    refresh: 1h
+
+remote_transmitter:
+  pin: GPIO20
+  carrier_duty_percent: 50%
+  id: woleix_ac_ir
+  non_blocking: true
+
+button:
+  - platform: template
+    id: power
+    name: "Power"
+    on_press:
+      - remote_transmitter.transmit_nec:
+          address: $nec_address
+          command: 0xFB04
+          command_repeats: 1
+  
+  - platform: template
+    id: speed
+    name: "Speed"
+    on_press:
+      - remote_transmitter.transmit_nec:
+          address: $nec_address
+          command: 0xF906
+          command_repeats: 1
+
+  - platform: template
+    id: temp_up
+    name: "Temp+"
+    on_press:
+      - remote_transmitter.transmit_nec:
+          address: $nec_address
+          command: 0xFA05
+          command_repeats: 1
+          repeat:
+            times: 2
+            wait_time: 150ms
+
+  - platform: template
+    id: mode
+    name: "Mode"
+    on_press:
+      - remote_transmitter.transmit_nec:
+          address: $nec_address
+          command: 0xF20D
+          command_repeats: 1
+
+  - platform: template
+    id: temp_down
+    name: "Temp-"
+    on_press:
+      - remote_transmitter.transmit_nec:
+          address: $nec_address
+          command: 0xFE01
+          command_repeats: 1
+          repeat:
+            times: 2
+            wait_time: 150ms
+
+  - platform: template
+    id: timer
+    name: "Timer"
+    on_press:
+      - remote_transmitter.transmit_nec:
+          address: $nec_address
+          command: 0xFF00
+          command_repeats: 1
+
+#climate:
+#  - platform: climate_ir_woleix
+#    name: "Woleix AC"
+#    id: woleix_ac
+#    transmitter_id: woleix_ac_ir
+#    sensor: woleix_ac_current_temperature
+#    humidity_sensor: woleix_ac_current_humidity
+
+sensor:
+  - platform: dht
+    model: DHT11
+    pin: GPIO4
+    id: woleix_ac_dht
+    temperature:
+      name: Temperature
+      id: woleix_ac_current_temperature
+    humidity:
+      name: Humidity
+      id: woleix_ac_current_humidity
+    update_interval: 60s
+
+globals:
+  - id: scan_running
+    type: bool
+    initial_value: 'false'
+  - id: current_scan_byte
+    type: uint8_t
+    initial_value: '0x00'
+
+interval:
+  - interval: 300ms
+    then:
+      - if:
+          condition:
+            lambda: 'return id(scan_running);'
+          then:
+            - lambda: |-
+                static const uint8_t known[] = {0x00, 0x01, 0x04, 0x05, 0x06, 0x0D};
+                
+                uint8_t cmd = id(current_scan_byte);
+                bool skip;
+                do {
+                  skip = false;
+                  for (int i = 0; i < 6; i++) {
+                    if (cmd == known[i]) {
+                      cmd++;
+                      skip = true;
+                      break;
+                    }
+                  }
+                } while (skip);
+                
+                if (cmd < id(current_scan_byte)) {
+                  ESP_LOGW("scan", "Scan complete! Wrapped around.");
+                  id(scan_running) = false;
+                  return;
+                }
+                
+                uint16_t full_cmd = ((~cmd & 0xFF) << 8) | cmd;
+                ESP_LOGI("scan", "Byte 0x%02X (full: 0x%04X) [%d/250]", cmd, full_cmd, cmd);
+                
+                id(current_scan_byte) = cmd + 1;
+            - remote_transmitter.transmit_nec:
+                address: 0xFB04
+                command: !lambda |-
+                  uint8_t cmd = id(current_scan_byte) - 1;
+                  return ((~cmd & 0xFF) << 8) | cmd;
+                command_repeats: 1
+binary_sensor:
+  - platform: gpio
+    id: scan_toggle_button
+    name: "NEC Scan Toggle"
+    pin: 
+      number: GPIO01
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    filters:
+      - delayed_on: 50ms
+      - delayed_off: 50ms
+    on_press:
+      - lambda: |-
+          id(scan_running) = !id(scan_running);
+          if (id(scan_running)) {
+            ESP_LOGI("scan", "Scan STARTED");
+          } else {
+            ESP_LOGI("scan", "Scan PAUSED at 0x%04X", id(current_scan_byte));
+          }

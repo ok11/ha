@@ -1,0 +1,75 @@
+substitutions:
+  host_name: led-desk
+  device_name: Desk LED
+
+esphome:
+  name: ${host_name}
+  friendly_name: ${device_name}
+  min_version: 2024.11.0
+  name_add_mac_suffix: false
+
+esp32:
+  board: az-delivery-devkit-v4
+  framework:
+    type: esp-idf
+
+web_server:
+  port: 80
+  version: 3
+  include_internal: true
+
+logger:
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  min_auth_mode: WPA2
+  ap:
+    ssid: ${device_name}
+    password: !secret ap_password
+
+output:
+  - platform: ledc
+    pin:
+      number: GPIO18
+    id: cold_white
+    frequency: 1220Hz
+  - platform: ledc
+    pin:
+      number: GPIO19
+    id: warm_white
+    frequency: 1220Hz
+
+light:
+  - platform: cwww
+    id: desk_led_lamp
+    name: "Desk Lamp"
+    cold_white: cold_white
+    warm_white: warm_white
+    cold_white_color_temperature: 6500 K
+    warm_white_color_temperature: 2700 K
+    default_transition_length: 1s
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO32
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    name: "On-Off"
+    internal: true
+    filters:
+    - delayed_off: 10ms
+    on_click:
+      then:
+        - light.toggle: desk_led_lamp

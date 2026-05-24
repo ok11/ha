@@ -1,0 +1,303 @@
+substitutions:
+  host_name: garage-opener-keypad
+  device_name: Garage Opener Keypad
+
+esphome:
+  name: ${host_name}
+  friendly_name: ${device_name}
+  min_version: 2025.9.0
+  name_add_mac_suffix: false
+  on_boot:
+    priority: -100
+    then:
+      - script.execute:
+          id: show_message
+          message: "----"
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+  level: DEBUG
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+# Allow Over-The-Air updates
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  min_auth_mode: WPA2
+  ap:
+    ssid: ${device_name}
+    password: !secret ap_password
+
+globals:
+
+  - id: input_prompt
+    type: std::string
+    initial_value: '"----"'
+
+  - id: input_buf
+    type: std::string
+    initial_value: '"----"'
+
+  - id: input_suspended
+    type: bool
+    initial_value: 'false'
+
+  - id: input_blocked
+    type: bool
+    initial_value: 'false'
+
+  - id: failed_attempts
+    type: int
+    initial_value: '0'
+
+  - id: block_duration
+    type: int
+    initial_value: '30'
+
+  - id: block_timer
+    type: int
+    initial_value: '0'
+
+  - id: max_failures
+    type: int
+    initial_value: '3'
+
+  - id: keypad_input_received
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+number:
+  - platform: template
+    name: "Stored PIN"
+    id: stored_pin
+    min_value: 0
+    max_value: 9999
+    step: 1
+    restore_value: true
+    initial_value: 1234
+    mode: box
+    internal: true
+    set_action:
+      then:
+        - logger.log:
+            level: INFO
+            format: "Stored PIN changed to: %d"
+            args: ["x"]
+
+sensor:
+  - platform: homeassistant
+    id: current_pin
+    name: "Central PIN"
+    entity_id: input_number.garage_pin
+    accuracy_decimals: 0
+    on_value:
+      lambda: |- 
+        id(stored_pin).publish_state(x);
+
+script:
+  - id: show_message
+    parameters:
+      message: string
+    then:
+      - lambda: |-
+          id(input_buf) = message;
+          id(code_display).update();
+
+  - id: show_popup_message
+    parameters:
+      popup_message: string
+      exit_message: string
+    then:
+      - lambda: id(input_suspended) = true;
+      - script.execute:
+          id: show_message
+          message: !lambda return popup_message;
+      - delay: 1500ms
+      - script.execute:
+          id: show_message
+          message: !lambda return exit_message;
+      - lambda: id(input_suspended) = false;
+
+  - id: clean_pin
+    then:
+      - script.execute:
+          id: show_message
+          message: id(input_prompt)
+
+matrix_keypad:
+  id: garage_keypad
+  rows:
+    - pin: 
+        number: 17
+        mode:
+          output: true
+          input: false
+    - pin:
+        number: 23
+        mode:
+          output: true
+          input: false
+    - pin:
+        number: 22
+        mode:
+          output: true
+          input: false
+    - pin:
+        number: 19
+        mode:
+          output: true
+          input: false
+  columns:
+    - pin:
+        number: 18
+        mode:
+          output: false
+          input: true
+          pullup: true
+    - pin:
+        number: 16
+        mode:
+          output: false
+          input: true
+          pullup: true
+    - pin:
+        number: 21
+        mode:
+          output: false
+          input: true
+          pullup: true
+
+  keys: "123456789*0#"
+  has_diodes: false
+  on_key:
+    - logger.log:
+        level: DEBUG
+        format: "Key pressed: %c"
+        args: [x]
+    - lambda: |-
+        id(keypad_input_received) = true;
+
+key_collector:
+  - id: pincode_reader
+    source_id: garage_keypad
+    min_length: 4
+    max_length: 4
+    end_keys: "#"
+    end_key_required: true
+    clear_keys: "*"
+    allowed_keys: "0123456789"
+    timeout: 5s
+
+    on_progress:
+      - lambda: |-
+          if (!id(input_suspended) && !id(input_blocked)) {
+            id(input_buf) = x;
+          }
+
+    on_result:
+      - lambda: |-
+          if (id(input_suspended) || id(input_blocked)) return;
+
+          int stored = (int) id(stored_pin).state;
+          int input = atoi(x.c_str());
+
+          if (input == stored) {
+            ESP_LOGI("PIN", "Correct PIN entered: %s", x.c_str());
+            id(gate_open).publish_state(true);
+            id(show_popup_message).execute("GOOD", id(input_prompt));
+            id(failed_attempts) = 0;
+          } else {
+            int failures = id(failed_attempts);
+            failures += 1;
+            ESP_LOGW("PIN", "Incorrect PIN: %s, entered %d times", x.c_str(), failures);
+            char b[5];
+            snprintf(b, sizeof b, "F  %d",  failures);
+            if (failures >= id(max_failures)) {
+              ESP_LOGW("PIN", "Blocking input for %ds", id(block_duration));
+              id(show_popup_message).execute(b, "BLCD");
+              id(input_blocked) = true;
+              failures = 0;
+            } else {
+              id(show_popup_message).execute(b, id(input_prompt));
+            }
+            id(failed_attempts) = failures;
+          }
+
+    on_timeout:
+      - lambda: |-
+          if (id(input_suspended) || id(input_blocked)) return;
+          id(clean_pin).execute();
+
+display:
+  - platform: tm1637
+    id: code_display
+    clk_pin: 26
+    dio_pin: 27
+    inverted: false
+    intensity: 3
+    length: 4
+    update_interval: 100ms
+    lambda: |-
+      it.print(id(input_buf).c_str());
+
+binary_sensor:
+  - platform: template
+    name: "Gate Open"
+    id: gate_open
+    device_class: opening
+    lambda: |-
+      return false;
+    internal: true
+    on_press:
+      - logger.log: "Gate open signal triggered!"
+  - platform: matrix_keypad
+    id: star_key
+    name: "Star Key"
+    keypad_id: garage_keypad
+    key: "*"
+    on_press:
+      then:
+        - lambda: |-
+            id(input_buf) = id(input_prompt);
+
+interval:
+
+  - interval: 1s
+    id: blocking_timer
+    then: 
+      - lambda: |-
+          if (!id(input_blocked) || id(input_suspended)) return;
+
+          int timer = id(block_timer);
+
+          if (timer == 0) {
+            timer = id(block_duration);
+          }
+          char b[6];
+          char delimiter;
+          if (timer % 2 == 0) {
+            snprintf(b, sizeof b, "%02d%02d", timer / 60, timer % 60);
+          } else {
+            snprintf(b, sizeof b, "%02d.%02d", timer / 60, timer % 60);
+          }
+          id(input_buf) = b;
+          timer -= 1;
+          if (timer == 0) {
+            id(input_blocked) = false;
+            id(input_buf) = id(input_prompt);
+          }
+          id(block_timer) = timer;
