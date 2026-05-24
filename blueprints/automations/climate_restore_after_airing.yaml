@@ -1,0 +1,61 @@
+blueprint:
+  name: Restore the heating after airing
+  description: Restore the heating after airing
+  domain: automation
+  input:
+    contact_sensor:
+      name: Contact sensor or a group
+      selector:
+        entity:
+          filter:
+            - domain: binary_sensor
+            - device_class: window
+    climate_actor:
+      name: Climate entity (TRV or AC)
+      selector:
+        entity:
+          filter:
+            - domain: climate
+            - device_class: heat
+    device_type:
+      name: Climate device type
+      selector:
+        select:
+          options:
+          - TRV
+          - AC
+    temperature_var:
+      name: Temporary storage for the temperature
+      selector:
+        entity:
+          filter:
+            - domain: input_number
+    mode_var:
+      name: Temporary storage for the HVAC mode
+      selector:
+        entity:
+          filter:
+            - domain: input_select
+variables:
+  stored_temperature: !input temperature_var
+  stored_mode: !input mode_var
+triggers:
+  - entity_id: !input contact_sensor
+    for:
+      seconds: 10
+    from: "on"
+    to: "off"
+    trigger: state
+conditions:
+  - condition: state
+    entity_id: input_boolean.global_heating
+    state: "on"
+actions:
+  - data_template:
+      entity_id: !input climate_actor
+      temperature: "{{ states(stored_temperature) | float }}"
+    action: climate.set_temperature
+  - data_template:
+      entity_id: !input climate_actor
+      hvac_mode: "{{ states(stored_mode) }}"
+    action: climate.set_hvac_mode

@@ -1,0 +1,67 @@
+blueprint:
+  name: Switch off the heating on airing
+  description: Switch off the heating on airing
+  domain: automation
+  input:
+    contact_sensor:
+      name: Contact sensor or a group
+      selector:
+        entity:
+          filter:
+            - domain: binary_sensor
+            - device_class: window
+    device_type:
+      name: Climate device type
+      selector:
+        select:
+          options:
+          - TRV
+          - AC
+    climate_actor:
+      name: Climate entity (TRV or AC)
+      selector:
+        entity:
+          filter:
+            - domain: climate
+            - device_class: heat
+    temperature_var:
+      name: Temporary storage for the temperature
+      selector:
+        entity:
+          filter:
+            - domain: input_number
+    mode_var:
+      name: Temporary storage for the HVAC mode
+      selector:
+        entity:
+          filter:
+            - domain: input_select
+variables:
+  climate_actor: !input climate_actor
+triggers:
+  - entity_id: !input contact_sensor
+    for:
+      seconds: 10
+    from: "off"
+    to: "on"
+    trigger: state
+conditions:
+  - condition: state
+    entity_id: input_boolean.global_heating
+    state: "on"
+actions:
+  - target:
+      entity_id: !input temperature_var
+    data:
+      value: "{{ state_attr(climate_actor, 'temperature') | float }}"
+    action: input_number.set_value
+  - target:
+      entity_id: !input mode_var
+    data:
+      option: "{{ states(climate_actor) | string }}"
+    action: input_select.select_option
+  - target:
+      entity_id: !input climate_actor
+    data:
+      hvac_mode: "off"
+    action: climate.set_hvac_mode

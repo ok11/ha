@@ -1,0 +1,335 @@
+- binary_sensor:
+    - default_entity_id: binary_sensor.free_day
+      name: Free Day
+      state:
+        "{{ is_state('binary_sensor.workday', 'off') or is_state('calendar.school_vacation',
+        'on') }}"
+
+    - default_entity_id: binary_sensor.busy_day
+      name: Busy Day
+      state:
+        "{{ is_state('binary_sensor.workday', 'on') and is_state('calendar.school_vacation',
+        'off') }}"
+
+    - default_entity_id: binary_sensor.3d_printer_running
+      name: The 3D Printer is Printing Something Awesome
+      state: >
+        {{ states('sensor.3d_printer_plug_power') | int > 100 }}
+
+- sensor:
+    - name: "HA Main Status"
+      unique_id: ha_main_status
+      state: >
+        {{ 'good' if (states('sensor.disk_free') | float(0) > 10 and states('sensor.processor_temperature') | float(0) < 70) else 'bad' }}
+
+    - name: "Short Date and Time"
+      state: "{{ as_timestamp(states('sensor.date_time_iso')) | timestamp_custom('%a %d.%m.%y %H:%M') }}"
+      icon: "mdi:calendar-clock"
+
+    - name: "Day of Week"
+      unique_id: day_of_week
+      state: "{{ ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'][now().weekday()] }}"
+
+    - name: "Short Day of Week"
+      unique_id: day_of_week_short
+      state: "{{ ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][now().weekday()] }}"
+
+    - name: "Date Only"
+      unique_id: date_only
+      state: "{{ as_timestamp(states('sensor.date_time_iso')) | timestamp_custom('%B %-d') }}"
+      icon: "mdi:calendar-clock"
+
+- sensor:
+    - name: WashDryer Run Duration
+      unique_id: washdryer_run_duration
+      state: >-
+        {{ 0 if states('sensor.washrdyer_total_duration') == 'unknown' else states('sensor.washrdyer_total_duration') }}     
+      availability: >-
+        {{ not is_state('sensor.washrdyer_total_duration', 'unavailable') }}
+  trigger:
+    - trigger: state
+      entity_id: sensor.washdryer_state
+  
+- sensor:
+    - name: Garage Gate Status
+      unique_id: garage_gate_status
+      state: >
+        {% set hold = this.state if this.state in ['opening', 'closing', 'stopped']
+                      else 'stopped' %}
+        {% set at_end = is_state('binary_sensor.garage_gate_open_sensor_contact', 'off')
+                        or is_state('binary_sensor.garage_gate_closed_sensor_contact', 'off') %}
+        {% if trigger.id == 'move' %}
+          {% if at_end %}stopped
+          {% else %}
+            {% set v = trigger.to_state.state %}
+            {% if v == 'decreasing' %}opening
+            {% elif v == 'increasing' %}closing
+            {% else %}{{ hold }}{% endif %}
+          {% endif %}
+        {% elif trigger.id == 'stop' or trigger.id == "end" %}
+          stopped
+        {% elif this.state in ['opening', 'closing']
+                and (now() - this.last_changed).total_seconds() > 25 %}
+          stopped
+        {% else %}
+          {{ hold }}
+        {% endif %}
+      availability: >-
+        {{ not is_state('sensor.garage_gate_movement_direction', 'unavailable') }}
+  trigger:
+  - trigger: state
+    entity_id:
+      - switch.garage_gate_opener
+    from: "off"
+    to: "on"
+    id: stop
+  - trigger: state
+    entity_id: sensor.garage_gate_movement_direction
+    id: move
+  - trigger: state
+    entity_id:
+      - binary_sensor.garage_gate_open_sensor_contact
+      - binary_sensor.garage_gate_closed_sensor_contact
+    from: "on"
+    to: "off"
+    id: end
+  - trigger: time_pattern
+    seconds: "/5"
+    id: tick
+
+- sensor:
+    name: Garage Gate Position
+    unique_id: garage_gate_position
+    unit_of_measurement: "%"
+    variables:
+      total_run_time: 20
+      tick_interval: 5
+      step: "{{ (100 * tick_interval / total_run_time) | round(0) | int }}"
+    state: >-
+      {% if is_state('binary_sensor.garage_gate_closed_sensor_contact', 'off') %}0
+      {% elif is_state('binary_sensor.garage_gate_open_sensor_contact', 'off') %}100
+      {% elif this.state in ['unknown', 'unavailable', None] %}{{ this.state }}
+      {% elif trigger.id == 'tick' %}
+        {% set pos = this.state | int %}
+        {% if is_state('sensor.garage_gate_status', 'opening') %}{{ [pos + step, 100] | min }}
+        {% elif is_state('sensor.garage_gate_status', 'closing') %}{{ [pos - step, 0] | max }}
+        {% else %}{{ pos }}{% endif %}
+      {% else %}{{ this.state }}{% endif %}
+  trigger:
+    - trigger: state
+      entity_id:
+        - binary_sensor.garage_gate_open_sensor_contact
+        - binary_sensor.garage_gate_closed_sensor_contact
+      from: "on"
+      to: "off"
+      id: end
+    - trigger: time_pattern
+      seconds: "/5"
+      id: tick
+
+- cover:
+    device_class: garage
+    name: Garage Gate
+    unique_id: garage_gate
+    state: >-
+      {% if is_state('binary_sensor.garage_gate_closed_sensor_contact', 'off') %}closed
+      {% elif is_state('binary_sensor.garage_gate_open_sensor_contact', 'off') %}open
+      {% elif is_state('sensor.garage_gate_status', 'opening') %}opening
+      {% elif is_state('sensor.garage_gate_status', 'closing') %}closing
+      {% else %}open{% endif %}
+    open_cover:
+      - action: script.gate_go
+        data: { target: open }
+    close_cover:
+      - action: script.gate_go
+        data: { target: close }
+    stop_cover:
+      - action: script.gate_stop
+    position: >-
+      {% set pos = states('sensor.garage_gate_position') %}
+      {{ pos if pos in ['unknown', 'unavailable', None] else pos | int }}
+    availability: >-
+      {{ states('sensor.garage_gate_status') | default('none') not in ['unavailable','none'] and states('switch.garage_gate_opener') | default('none') not in ['unavailable','unknown','none'] }}
+
+    icon: >-
+      {% if this.state == 'closed' %}mdi:garage
+      {% elif this.state == "open" %}mdi:garage-open
+      {% elif this.state in ['opening', 'closing'] %}mdi:garage-alert
+      {% else %}mdi:alert-box{% endif %}
+
+- light:
+    - name: New Room Light Work Zone
+      level: "{{ states('number.new_room_light_2_brightness_step') | int * 25.5 }}"
+      temperature: "{{ (1000000 / (3000 + (states('number.new_room_light_2_temperature_step') | int - 1) * 3500 / 9)) | round(0) }}"
+      state: "{{ is_state('switch.new_room_light_2_power_state', 'on') }}"
+      optimistic: true
+      min_mireds: "{{ (1000000 / 6500) | round(0) }}"
+      max_mireds: "{{ (1000000 / 3000) | round(0) }}"
+      turn_on:
+        - target:
+            entity_id:
+              - button.new_room_light_2_power_on
+          action: button.press
+        - target:
+            entity_id:
+              - switch.new_room_light_2_power_state
+          action: switch.turn_on
+      turn_off:
+        - target:
+            entity_id:
+              - button.new_room_light_2_power_off
+          action: button.press
+        - target:
+            entity_id:
+              - switch.new_room_light_2_power_state
+          action: switch.turn_off
+      set_level:
+        - variables:
+            target: "{{ (brightness / 25.5) | int }}"
+            current: "{{ states('number.new_room_light_2_brightness_step') | int }}"
+        - sequence:
+            - repeat:
+                count: "{{ (target - current) | abs }}"
+                sequence:
+                  - action: button.press
+                    target:
+                      entity_id: |-
+                        {% if target > current %}
+                          button.new_room_light_2_brightness_up
+                        {% else %}
+                          button.new_room_light_2_brightness_down
+                        {% endif %}
+            - action: number.set_value
+              target:
+                entity_id:
+                  - number.new_room_light_2_brightness_step
+              data:
+                value: "{{ target }}"
+      set_temperature:
+        - variables:
+            kelvin: "{{ 1000000 / color_temp }}"
+            target: "{{ [1, [10, ((kelvin - 3000) * 9 / 3500 + 1) | round(0) | int] | min] | max }}"
+            current: "{{ states('number.new_room_light_2_temperature_step') | int }}"
+        - sequence:
+            - repeat:
+                count: "{{ (target - current) | abs }}"
+                sequence:
+                  - action: button.press
+                    target:
+                      entity_id: >-
+                        {%- if target > current -%}
+                          button.new_room_light_2_temperature_up
+                        {%- else -%}
+                          button.new_room_light_2_temperature_down
+                        {%- endif -%}
+            - action: number.set_value
+              target:
+                entity_id: number.new_room_light_2_temperature_step
+              data:
+                value: "{{ target }}"
+
+    - name: New Room Light Bed
+      level: "{{ states('number.new_room_light_1_brightness_step') | int * 25.5 }}"
+      temperature: "{{ (1000000 / (3000 + (states('number.new_room_light_1_temperature_step') | int - 1) * 3500 / 9)) | round(0) }}"
+      state: "{{ is_state('switch.new_room_light_1_power_state', 'on') }}"
+      optimistic: true
+      min_mireds: "{{ (1000000 / 6500) | round(0) }}"
+      max_mireds: "{{ (1000000 / 3000) | round(0) }}"
+      turn_on:
+        - target:
+            entity_id:
+              - button.new_room_light_1_power_on
+          action: button.press
+        - target:
+            entity_id:
+              - switch.new_room_light_1_power_state
+          action: switch.turn_on
+      turn_off:
+        - target:
+            entity_id:
+              - button.new_room_light_1_power_off
+          action: button.press
+        - target:
+            entity_id:
+              - switch.new_room_light_1_power_state
+          action: switch.turn_off
+      set_level:
+        - variables:
+            target: "{{ (brightness / 25.5) | int }}"
+            current: "{{ states('number.new_room_light_1_brightness_step') | int }}"
+        - sequence:
+            - repeat:
+                count: "{{ (target - current) | abs }}"
+                sequence:
+                  - action: button.press
+                    target:
+                      entity_id: |-
+                        {% if target > current %}
+                          button.new_room_light_1_brightness_up
+                        {% else %}
+                          button.new_room_light_1_brightness_down
+                        {% endif %}
+            - action: number.set_value
+              target:
+                entity_id:
+                  - number.new_room_light_1_brightness_step
+              data:
+                value: "{{ target }}"
+      set_temperature:
+        - variables:
+            kelvin: "{{ 1000000 / color_temp }}"
+            target: "{{ [1, [10, ((kelvin - 3000) * 9 / 3500 + 1) | round(0) | int] | min] | max }}"
+            current: "{{ states('number.new_room_light_1_temperature_step') | int }}"
+        - sequence:
+            - repeat:
+                count: "{{ (target - current) | abs }}"
+                sequence:
+                  - action: button.press
+                    target:
+                      entity_id: >-
+                        {%- if target > current -%}
+                          button.new_room_light_1_temperature_up
+                        {%- else -%}
+                          button.new_room_light_1_temperature_down
+                        {%- endif -%}
+            - action: number.set_value
+              target:
+                entity_id: number.new_room_light_1_temperature_step
+              data:
+                value: "{{ target }}"
+
+- sensor:
+    - name: "Last litter visit"
+      unique_id: last_litter_visit
+      state: "{{ trigger.to_state.last_changed.timestamp() | int(0) }}"
+      attributes:
+        cat: "{{ cat }}"
+        weight: "{{ weight }}"
+        duration: "{{ duration }}"
+        visit_number_today: "{{ visit }}"
+        at: "{{ now().isoformat() }}"
+  trigger:
+    - platform: state
+      entity_id: sensor.cat_litter_box_number_of_excretion
+  condition:
+    - condition: template
+      value_template: >
+        {{ trigger.from_state.state not in ['unknown', 'unavailable']
+          and trigger.to_state.state not in ['unknown', 'unavailable']
+          and trigger.to_state.state | int(-1) > trigger.from_state.state | int(-1) }}
+  variables:
+    weight: "{{ states('sensor.cat_litter_box_cat_weight') | float(0) }}"
+    duration: "{{ states('sensor.cat_litter_box_duration_of_excretion') | int(0) }}"
+    visit: "{{ states('sensor.cat_litter_box_number_of_excretion')  | int(0) }}"
+    cat: >
+      {% if 3500 <= weight <= 5000 %}Danny
+      {% elif 5500 <= weight <= 8000 %}Sammy
+      {% else %}unknown ({{ weight }}g){% endif %}
+  action:
+    - event: cat_litter_visit
+      event_data:
+        cat: "{{ cat }}"
+        weight: "{{ weight }}"
+        duration: "{{ duration }}"
+        visit_number_today: "{{ trigger.to_state.state | int }}"
+        at: "{{ trigger.to_state.last_changed.isoformat() }}"

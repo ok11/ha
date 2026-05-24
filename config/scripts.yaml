@@ -1,0 +1,396 @@
+  vacuum_clean_a_few_rooms:
+  sequence:
+  - alias: Get room id using input select
+    variables:
+      target_rooms: "{% set rooms = [] %} {% if is_state('input_boolean.clean_the_office',
+        'on') %}\n    {% set rooms = rooms + [20] %}\n{% endif %} {% if is_state('input_boolean.clean_the_stairway',
+        'on') %}\n    {% set rooms = rooms + [17] %}\n{% endif %} {% if is_state('input_boolean.clean_the_hobby_room',
+        'on') %}\n    {% set rooms = rooms + [18] %}\n{% endif %} {% if is_state('input_boolean.clean_the_new_room',
+        'on') %}\n    {% set rooms = rooms + [19] %}\n{% endif %} {% if is_state('input_boolean.clean_the_wc',
+        'on') %}\n    {% set rooms = rooms + [16] %}\n{% endif %}\n{{rooms}}"
+  - condition: template
+    value_template: '{{ target_rooms | length > 0 }}'
+  - data:
+      command: app_segment_clean
+      params:
+      - segments: '{{ target_rooms }}'
+        repeat: 2
+    target:
+      entity_id: vacuum.s8
+    action: vacuum.send_command
+  alias: S8 Clean Selected Rooms
+  description: 'Vacuum clean selected rooms controlled by toggle helpers per room '
+  icon: mdi:robot-vacuum
+sweep_the_office:
+  alias: Sweep the Office
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.s8
+      rooms:
+      - '20'
+      repeats: 2
+      cleaning_mode: sweeping
+  description: ''
+  icon: mdi:pen
+sweep_the_stairway:
+  alias: Sweep the Stairway
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.s8
+      rooms:
+      - '17'
+      repeats: 2
+      cleaning_mode: sweeping
+  description: ''
+  icon: mdi:stairs
+sweep_the_hobby_room:
+  alias: Sweep the Hobby Room
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.s8
+      rooms:
+      - '18'
+      repeats: 2
+      cleaning_mode: sweeping
+  description: ''
+  icon: mdi:dumbbell
+sweep_the_wc:
+  alias: Sweep the WC
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.s8
+      rooms:
+      - '16'
+      repeats: 2
+      cleaning_mode: sweeping
+  description: ''
+  icon: mdi:shower-head
+sweep_the_new_room:
+  alias: Sweep the New Room
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.s8
+      rooms:
+      - '19'
+      repeats: 2
+      cleaning_mode: sweeping
+  description: ''
+  icon: mdi:account
+sweep_the_living_room:
+  alias: Sweep the Living Room
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.v50_ultra_complete
+      rooms:
+      - '8'
+      cleaning_mode: sweeping
+      repeats: 2
+  description: ''
+  icon: mdi:sofa
+sweep_the_kitchen:
+  alias: Sweep the Kitchen
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.v50_ultra_complete
+      rooms:
+      - '9'
+      repeats: 2
+      cleaning_mode: sweeping
+  description: ''
+  icon: mdi:knife
+sweep_the_bedroom:
+  alias: Sweep the Bedroom
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.v50_ultra_complete
+      rooms:
+      - '3'
+      repeats: 2
+      cleaning_mode: sweeping
+  description: ''
+  icon: mdi:bed
+sweep_the_bathroom:
+  alias: Sweep the Bathroom
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.v50_ultra_complete
+      rooms:
+      - '1'
+      cleaning_mode: sweeping
+      repeats: 2
+  description: ''
+  icon: mdi:bathtub
+sweep_the_andrey_s_room:
+  alias: Sweep the Andrey's Room
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.v50_ultra_complete
+      rooms:
+      - '2'
+      repeats: 2
+      cleaning_mode: sweeping
+  description: ''
+  icon: mdi:account
+sweep_the_svetlana_s_room:
+  alias: Sweep the Svetlana's Room
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.v50_ultra_complete
+      rooms:
+      - '5'
+      repeats: 2
+      cleaning_mode: sweeping
+  description: ''
+  icon: mdi:cat
+sweep_the_guest_wc:
+  alias: Sweep the Guest WC
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.v50_ultra_complete
+      rooms:
+      - '7'
+      repeats: 2
+      cleaning_mode: sweeping
+  description: ''
+  icon: mdi:toilet
+sweep_the_hallway:
+  alias: Sweep the Hallway
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.v50_ultra_complete
+      rooms:
+      - '6'
+      repeats: 2
+      cleaning_mode: sweeping
+  description: ''
+  icon: mdi:coat-rack
+sweep_the_corridor:
+  alias: Sweep the Corridor
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.v50_ultra_complete
+      rooms:
+      - '4'
+      repeats: 2
+      cleaning_mode: sweeping
+  description: ''
+  icon: mdi:navigation
+sweep_and_mop_the_andrey_s_room:
+  alias: Sweep and mop the Andrey's Room
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.v50_ultra_complete
+      rooms:
+      - '2'
+      repeats: 2
+      cleaning_mode: sweeping_and_mopping
+  description: ''
+  icon: mdi:account
+sweep_and_mop_the_bathroom:
+  alias: Sweep and mop the Bathroom
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.v50_ultra_complete
+      rooms:
+      - '1'
+      cleaning_mode: sweeping_and_mopping
+      repeats: 2
+  description: ''
+  icon: mdi:bathtub
+
+sweep_and_mop_the_bedroom:
+  alias: Sweep and mop the Bedroom
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.v50_ultra_complete
+      rooms:
+      - '3'
+      repeats: 2
+      cleaning_mode: sweeping_and_mopping
+  description: ''
+  icon: mdi:bed
+
+sweep_and_mop_the_corridor:
+  alias: Sweep and mop the Corridor
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.v50_ultra_complete
+      rooms:
+      - '4'
+      repeats: 2
+      cleaning_mode: sweeping_and_mopping
+  description: ''
+  icon: mdi:navigation
+
+sweep_and_mop_the_guest_wc:
+  alias: Sweep and mop the Guest WC
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.v50_ultra_complete
+      rooms:
+      - '7'
+      repeats: 2
+      cleaning_mode: sweeping_and_mopping
+  description: ''
+  icon: mdi:toilet
+
+sweep_and_mop_the_hallway:
+  alias: Sweep and mop the Hallway
+  use_blueprint:
+    path: ok11/clean_a_room.yaml
+    input:
+      vacuum_cleaner: vacuum.v50_ultra_complete
+      rooms:
+      - '6'
+      repeats: 2
+      cleaning_mode: sweeping_and_mopping
+  description: ''
+  icon: mdi:coat-rack
+
+v50_clean_selected_rooms:
+  sequence:
+  - alias: Get room id using input select
+    variables:
+      target_rooms: "{% set rooms = [] %} {% if is_state('input_boolean.clean_the_living_room',
+        'on') %}\n    {% set rooms = rooms + [8] %}\n{% endif %} {% if is_state('input_boolean.clean_the_kitchen',
+        'on') %}\n    {% set rooms = rooms + [9] %}\n{% endif %} {% if is_state('input_boolean.clean_the_bedroom',
+        'on') %}\n    {% set rooms = rooms + [3] %}\n{% endif %} {% if is_state('input_boolean.clean_the_bathroom',
+        'on') %}\n    {% set rooms = rooms + [1] %}\n{% endif %} {% if is_state('input_boolean.clean_andrey_s_room',
+        'on') %}\n    {% set rooms = rooms + [2] %}\n{% endif %} {% if is_state('input_boolean.clean_svetlana_s_room',
+        'on') %}\n    {% set rooms = rooms + [5] %}\n{% endif %} {% if is_state('input_boolean.clean_the_guest_wc',
+        'on') %}\n    {% set rooms = rooms + [7] %}\n{% endif %} {% if is_state('input_boolean.clean_the_hallway',
+        'on') %}\n    {% set rooms = rooms + [6] %}\n{% endif %} {% if is_state('input_boolean.clean_the_corridor',
+        'on') %}\n    {% set rooms = rooms + [4] %}\n{% endif %}\n{{rooms}}"
+  - condition: template
+    value_template: '{{ target_rooms | length > 0 }}'
+  - sequence:
+    - action: select.select_option
+      data:
+        option: '{{ ''sweeping_and_mopping'' if is_state(''input_boolean.v50_mop'',
+          ''on'') else ''sweeping'' }}'
+      target:
+        entity_id: select.v50_ultra_complete_cleaning_mode
+    - delay: 00:00:05
+    - action: dreame_vacuum.vacuum_clean_segment
+      data:
+        entity_id: vacuum.v50_ultra_complete
+        segments: '{{ target_rooms }}'
+        repeats: '{{ 1 if is_state(''input_boolean.v50_mop'', ''on'') else 2 }}'
+  alias: V50 Clean Selected Rooms
+  description: 'Clean selected rooms controlled by toggle helpers per room '
+  icon: mdi:robot-vacuum
+
+gate_pulse:
+  mode: queued
+  sequence:
+    - if:
+        - condition: state
+          entity_id: switch.garage_gate_opener
+          state: "on"
+      then:
+        - action: switch.turn_off
+          target: { entity_id: switch.garage_gate_opener }
+        - delay:
+            milliseconds: 500
+    - action: switch.turn_on
+      target: { entity_id: switch.garage_gate_opener }
+    - wait_template: "{{ is_state('sensor.garage_gate_status', 'stopped') }}"
+      timeout:
+        milliseconds: 500
+      continue_on_timeout: true
+
+gate_stop:
+  sequence:
+    # a pulse only STOPS the motor if it's moving; otherwise it starts it
+    - condition: template
+      value_template: >
+        {{ is_state('sensor.garage_gate_status', 'opening')
+            or is_state('sensor.garage_gate_status', 'closing') }}
+    - action: script.gate_pulse
+
+gate_go:
+  mode: restart
+  variables:
+    desired:  "{{ 'opening' if target == 'open' else 'closing' }}"
+    opposite: "{{ 'closing' if target == 'open' else 'opening' }}"
+    endstop: >
+      {{ 'binary_sensor.garage_gate_open_sensor_contact' if target == 'open'
+          else 'binary_sensor.garage_gate_closed_sensor_contact' }}
+    at_endstop: >
+      {{ is_state(endstop, 'off') }}
+    max_iterations: 5         # see note: a reversal spans two iterations
+  sequence:
+    - condition: template     # already fully at target -> nothing to do
+      value_template: "{{ not is_state(endstop, 'off') }}"
+
+    - action: script.gate_pulse          # kick off motion
+
+    - repeat:
+        sequence:
+          # wait for the time needed to compensate physical 
+          # backlash/recoil/debounce + let ESPHome
+          # start differentiating the voltage
+          - wait_template: >
+              {{ is_state('sensor.garage_gate_status', 'opening')
+                  or is_state('sensor.garage_gate_status', 'closing')
+                  or is_state(endstop, 'off') }}
+            timeout:
+              seconds: 1
+              milliseconds: 500     # 1s pot window + backlash margin
+            continue_on_timeout: true
+          - choose:
+              - conditions: >              # correct, or endstop hit -> exit
+                  {{ is_state('sensor.garage_gate_status', desired)
+                      or is_state(endstop, 'off') }}
+                sequence: []
+              - conditions: >
+                  {{ is_state('sensor.garage_gate_status', opposite) }}
+                sequence:                  # wrong way: stop, pause, reverse
+                  - action: script.gate_pulse
+                  - delay: 
+                      seconds: 1  # respect motor debounce
+                  - action: script.gate_pulse
+            default:                       # still 'stopped' -> nudge again
+              - action: script.gate_pulse
+        until:
+          - condition: template
+            value_template: >
+              {{ is_state('sensor.garage_gate_status', desired)
+                  or is_state(endstop, 'off')
+                  or repeat.index >= max_iterations }}
+
+    - choose:
+        - conditions: >                    # moving correctly -> ride to endstop
+            {{ is_state('sensor.garage_gate_status', desired)
+                and not is_state(endstop, 'off') }}
+          sequence:
+            - wait_template: "{{ is_state(endstop, 'off') }}"
+              timeout: 
+                seconds: 28
+              continue_on_timeout: true
+        - conditions: "{{ is_state(endstop, 'off') }}"   # already done
+          sequence: []
+      default:                             # gave up
+        - action: persistent_notification.create
+          data:
+            title: "Garage gate"
+            message: "Gate failed to reach {{ target }} — RF interference or obstruction?"

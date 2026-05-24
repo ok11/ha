@@ -1,0 +1,95 @@
+blueprint:
+  name: Power sensor — Telegram notification on device finish
+  description: >
+    Sends a Telegram message when an active-load device (kettle, coffee machine,
+    toaster, etc.) finishes a run. A run is detected as: power rises above the
+    start threshold for the start duration, then later drops below the finish
+    threshold for the finish duration.
+
+    Requires the telegram_bot integration to be configured.
+  domain: automation
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    power_sensor:
+      name: Power sensor
+      description: The power sensor (in watts) of the smart plug or socket.
+      selector:
+        entity:
+          domain: sensor
+          device_class: power
+    device_name:
+      name: Device name
+      description: Friendly name of the appliance, used in the message.
+      default: Device
+      selector:
+        text:
+    start_threshold:
+      name: Start threshold
+      default: 100
+      selector:
+        number: { min: 1, max: 5000, step: 1, unit_of_measurement: W, mode: box }
+    start_duration:
+      name: Start duration
+      default: 5
+      selector:
+        number: { min: 0, max: 600, step: 1, unit_of_measurement: s, mode: box }
+    finish_threshold:
+      name: Finish threshold
+      default: 1
+      selector:
+        number: { min: 0, max: 100, step: 0.1, unit_of_measurement: W, mode: box }
+    finish_duration:
+      name: Finish duration
+      default: 10
+      selector:
+        number: { min: 0, max: 600, step: 1, unit_of_measurement: s, mode: box }
+    run_timeout:
+      name: Maximum run duration
+      description: >
+        Safety timeout. If the device doesn't finish within this time, the cycle
+        is abandoned and no notification is sent.
+      default: "01:00:00"
+      selector:
+        duration:
+    chat_id:
+      name: Telegram chat ID
+      description: >
+        Numeric chat ID. Positive for private chats, negative for group chats
+        (e.g. -1001234567890).
+      selector:
+        text:
+    finish_message:
+      name: Finish message
+      description: Supports templates. {{ device_name }} is available.
+      default: "✅ {{ device_name }} has finished."
+      selector:
+        text:
+          multiline: true
+
+mode: single
+max_exceeded: silent
+
+variables:
+  device_name: !input device_name
+
+triggers:
+  - trigger: numeric_state
+    entity_id: !input power_sensor
+    above: !input start_threshold
+    for:
+      seconds: !input start_duration
+
+actions:
+  - wait_for_trigger:
+      - trigger: numeric_state
+        entity_id: !input power_sensor
+        below: !input finish_threshold
+        for:
+          seconds: !input finish_duration
+    timeout: !input run_timeout
+    continue_on_timeout: false
+  - action: telegram_bot.send_message
+    data:
+      target: "{{ chat_id | int }}"
+      message: !input finish_message

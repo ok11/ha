@@ -1,0 +1,42 @@
+blueprint:
+  name: Prevent a climate device from switching on if a window is open
+  description: Prevent a climate device from switching on if a window is open
+  domain: automation
+  input:
+    contact_sensor:
+      name: Contact sensor or a group
+      selector:
+        entity:
+          filter:
+            - domain: binary_sensor
+            - device_class: window
+    device_type:
+      name: Climate device type
+      selector:
+        select:
+          options:
+          - TRV
+          - AC
+    climate_actor:
+      name: Climate entity (TRV or AC)
+      selector:
+        entity:
+          filter:
+            - domain: climate
+            - device_class: heat
+variables:
+  climate_actor: !input climate_actor
+triggers:
+  - entity_id: !input climate_actor
+    for:
+      seconds: 20
+    from: "off"
+    trigger: state
+conditions:
+  - condition: state
+    entity_id: !input contact_sensor
+    state: "on"
+actions:
+  - target:
+      entity_id: !input climate_actor
+    action: climate.turn_off

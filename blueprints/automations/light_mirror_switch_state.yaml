@@ -1,0 +1,40 @@
+blueprint:
+  name: Mirror switch to lamp
+  description: >
+    Keeps a smart lamp's state in sync with a smart switch. Useful when the lamp
+    is wired to permanent mains (always electrically on) and the switch is the
+    logical control point.
+  domain: automation
+#  homeassistant:
+#    min_version: 2024.10.0
+  input:
+    source_switch:
+      name: Source switch
+      description: The switch whose state should be mirrored.
+      selector:
+        entity:
+          domain: switch
+    target_lamp:
+      name: Target lamp
+      description: The lamp that should follow the switch.
+      selector:
+        entity:
+          domain: light
+
+mode: single
+max_exceeded: silent
+
+triggers:
+  - trigger: state
+    entity_id: !input source_switch
+    to:
+      - "on"
+      - "off"
+    not_from:
+      - "unavailable"
+      - "unknown"
+
+actions:
+  - action: "light.turn_{{ trigger.to_state.state }}"
+    target:
+      entity_id: !input target_lamp
